@@ -6,13 +6,18 @@ from baseColletingStep import BaseColletingStep
 from modules import cbpi
 
 @cbpi.step
-class HeartsStep(StepBase, BaseColletingStep):
-    temperatureSensor = StepProperty.Sensor("Датчик температуры", description="Датчик температуры в кубе")
+class StartStopStep(StepBase, BaseColletingStep):
+    temperatureSensor = StepProperty.Sensor("Датчик температуры", description="Датчик температуры в царге")
     initialCollecting = Property.Number("Стартовая скорость отбора, мл/ч", configurable=True, default_value=1000)
+    deltaTemp = Property.Number("Разрешенный залет температуры, °C", configurable=True, default_value=0.3)
+    decrement = Property.Number("Уменьшение отбора при залете температуры, %", configurable=True, default_value=10)
     endTemp = Property.Number("Температура завершения отбора", configurable=True, default_value=93)
     
+    initialTemp = None
+    currentCollecting = None
     collectingSpeed = 0.0
     temperature = 0
+    stopped = False
 
     def finish(self):
         self.actor_off(int(self.collectingActor))
@@ -27,7 +32,15 @@ class HeartsStep(StepBase, BaseColletingStep):
         self.manageActor()
 
     def recountCollecting(self):
-        self.collectingSpeed = int(self.initialCollecting)*(6.04 - 0.06*float(self.temperature))
+        if not self.currentCollecting:
+            self.currentCollecting = int(initialCollecting)
+        if not self.initialTemp:
+            self.initialTemp = float(self.temperature)
+        excess = float(self.temperature) - self.initialTemp > float(self.deltaTemp)
+        if excess and not self.stopped:
+            self.currentCollecting = self.currentCollecting * (100 - int(decrement)) / 100
+        self.stopped = excess
+        self.collectingSpeed = 0 if self.stopped else self.currentCollecting
 
     def updateAndCheckTemperature(self):
         self.temperature = float(self.get_sensor_value(int(self.temperatureSensor)))
